@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+  <!--
+    THESIS: アンケートを「終点まで乗る一本の路線」として描く。設問は駅、回答が揃うと区間が塗られる。
+            カード積み・ヒーロー数値の定型は使わない。
+    OWN-WORLD: 地図紙のような淡いグレー地、路線ブルーの太い縦線と白抜き駅マーク、評価にはアンバー。
+            日本語システムサンセリフ、数字は等幅数字。角は小さめ、影はオフセット付き。
+    STORY: 参加者は 1 分で回答し、通過した駅が増える手応えとともに「終点」で受付番号を受け取る。
+            集計は同じ路線バーで読める。
+    FIRST VIEWPORT: 路線サイン風のブランド、右にナビ。見出し＋所要時間の案内、左端から路線が始まり
+            最初の駅「所属コミュニティ」が見える。送信ボタンは路線の終端。
+    FORM: 東京の路線図（候補 1 位）。縦一本の路線を進行表示に使う staging。seed: unattended-autopilot。
+  -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Dev Days Tokyo（GitHub Vibe Riders）イベント事後アンケート" />
+    <meta name="theme-color" content="#0b5fd1" />
+    <title>Dev Days Tokyo 事後アンケート</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
