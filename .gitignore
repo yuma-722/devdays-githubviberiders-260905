@@ -1,0 +1,15 @@
+node_modules/
+frontend/build/
+frontend/coverage/
+**/bin/
+**/obj/
+**/TestResults/
+**/local.settings.json
+**/.env
+**/.env.local
+**/.env.*.local
+**/data/
+.vs/
+*.user
+*.suo
+*.log
