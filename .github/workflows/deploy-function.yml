@@ -1,0 +1,72 @@
+name: Build and deploy Function App
+on:
+  push:
+    branches:
+    - main
+    paths:
+    - backend/**
+    - .github/workflows/deploy-function.yml
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_NAME: func-devdays-survey
+  AZURE_FUNCTIONAPP_SOURCE_PATH: ./backend/Survey
+  DOTNET_VERSION: 10.0.x
+  CONFIGURATION: Release
+  WORKING_DIRECTORY: backend
+  DOTNET_VERSION_INPROC: 10.0.x
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: 'Resolve Project Dependencies Using Npm'
+      shell: bash
+      run: |
+        dotnet build --configuration Release
+        dotnet publish --configuration Release --output ./publish
+      working-directory: ${{ env.AZURE_FUNCTIONAPP_SOURCE_PATH }}
+
+    - name: Zip artifact for deployment
+      run: zip -r release.zip * .azurebackend
+      working-directory: ${{ env.AZURE_FUNCTIONAPP_SOURCE_PATH }}/publish
+
+    - name: Upload artifact for deployment job
+      uses: actions/upload-artifact@v7
+      with:
+        name: function-app
+        path: ${{ env.AZURE_FUNCTIONAPP_SOURCE_PATH }}/publish/release.zip
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
+
+    steps:
+    - name: Download artifact from build job
+      uses: actions/download-artifact@v8
+      with:
+        name: function-app
+
+    - name: Azure Login
+      uses: azure/login@v3
+      with:
+        client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_E3DA34DC49434B8898BD53596A13EE6C }}
+        tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D1AEBD75E2084A8B98F3DBE38EDBA35F }}
+        subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9AC2A16046EC485CAFF830B658E07CDF }}
+
+
+    - name: Deploy to Azure Function App
+      uses: Azure/backend-action@v1
+      with:
+        app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+        package: release.zip
