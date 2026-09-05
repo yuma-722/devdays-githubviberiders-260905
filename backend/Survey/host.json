@@ -1,0 +1,10 @@
+{
+  "version": "2.0",
+  "logging": {
+    "logLevel": {
+      "default": "Information",
+      "Microsoft.Azure.Cosmos": "Warning",
+      "Azure.Identity": "Warning"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/publish/
+**/local.settings.json
+**/local.settings.*.json
+!**/local.settings.example.json
+**/data/
+**/TestResults/
+**/*.user
