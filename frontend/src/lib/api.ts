@@ -36,8 +36,7 @@ export function resolveApiBase(configured: string | undefined = import.meta.env.
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-async function readJson(response: Response): Promise<unknown> {
-  const text = await response.text();
+function parseJson(text: string): unknown {
   if (text.length === 0) return undefined;
   try {
     return JSON.parse(text) as unknown;
@@ -58,19 +57,38 @@ function errorFromResponse(status: number, body: unknown): ApiError {
   return new ApiError(fallback, status, `HTTP_${status}`);
 }
 
-async function request(path: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+interface JsonResponse {
+  ok: boolean;
+  status: number;
+  body: unknown;
+}
+
+const TIMEOUT_ERROR = () =>
+  new ApiError('サーバーからの応答がありません。時間をおいて再度お試しください', 0, 'TIMEOUT');
+const NETWORK_ERROR = () =>
+  new ApiError('サーバーに接続できません。ネットワーク接続を確認してください', 0, 'NETWORK_ERROR');
+
+/**
+ * fetch を実行し、JSON 本文の読み込み完了までを 1 つのタイムアウトで覆う。
+ * ヘッダー受信後に本文が届かないケースも TIMEOUT として扱う。
+ */
+async function request(path: string, init: RequestInit, signal?: AbortSignal): Promise<JsonResponse> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
   const onOuterAbort = () => controller.abort();
   signal?.addEventListener('abort', onOuterAbort);
+
+  const translate = (err: unknown): never => {
+    if (signal?.aborted) throw err;
+    if (controller.signal.aborted) throw TIMEOUT_ERROR();
+    if (err instanceof DOMException && err.name === 'AbortError') throw TIMEOUT_ERROR();
+    throw NETWORK_ERROR();
+  };
+
   try {
-    return await fetch(`${resolveApiBase()}${path}`, { ...init, signal: controller.signal });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      if (signal?.aborted) throw err;
-      throw new ApiError('サーバーからの応答がありません。時間をおいて再度お試しください', 0, 'TIMEOUT');
-    }
-    throw new ApiError('サーバーに接続できません。ネットワーク接続を確認してください', 0, 'NETWORK_ERROR');
+    const response = await fetch(`${resolveApiBase()}${path}`, { ...init, signal: controller.signal }).catch(translate);
+    const text = await response.text().catch(translate);
+    return { ok: response.ok, status: response.status, body: parseJson(text) };
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onOuterAbort);
@@ -79,7 +97,7 @@ async function request(path: string, init: RequestInit, signal?: AbortSignal): P
 
 /** POST /api/surveys */
 export async function submitSurvey(payload: SurveyRequest, signal?: AbortSignal): Promise<SurveySuccessResponse> {
-  const response = await request(
+  const { ok, status, body } = await request(
     '/surveys',
     {
       method: 'POST',
@@ -88,9 +106,8 @@ export async function submitSurvey(payload: SurveyRequest, signal?: AbortSignal)
     },
     signal,
   );
-  const body = await readJson(response);
-  if (!response.ok) {
-    throw errorFromResponse(response.status, body);
+  if (!ok) {
+    throw errorFromResponse(status, body);
   }
   if (isRecord(body) && body.success === true && typeof body.surveyId === 'string') {
     return {
@@ -99,76 +116,89 @@ export async function submitSurvey(payload: SurveyRequest, signal?: AbortSignal)
       message: typeof body.message === 'string' ? body.message : 'アンケートの登録が完了しました',
     };
   }
-  throw new ApiError('サーバーから想定外の応答が返されました', response.status, 'INVALID_RESPONSE');
+  throw new ApiError('サーバーから想定外の応答が返されました', status, 'INVALID_RESPONSE');
 }
 
-const toCount = (value: unknown): number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+const invalidResults = (detail: string) =>
+  new ApiError(`集計データの形式が不正です（${detail}）`, 200, 'INVALID_RESPONSE');
+
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0;
+
+/** 指定キーがすべて非負整数で存在することを要求し、そのキーだけを抜き出す */
+function requireCounts(source: unknown, keys: readonly string[], field: string): Record<string, number> {
+  if (!isRecord(source)) throw invalidResults(`${field} がオブジェクトではありません`);
+  const out: Record<string, number> = {};
+  for (const key of keys) {
+    const value = source[key];
+    if (!isCount(value)) throw invalidResults(`${field}.${key} が非負整数ではありません`);
+    out[key] = value;
+  }
+  return out;
+}
 
 /**
- * API の集計データを画面用に正規化する。
- * 全選択肢・全評価のキーを必ず持たせ、欠けているものは 0 とする（0 件時の表示を安定させる）。
+ * API の集計データを検証し、画面用の型へ変換する。
+ * README の契約（totalResponses / 全選択肢・全評価のキー / average / feedback 配列）が
+ * 欠けている・型が壊れている場合は INVALID_RESPONSE を投げ、偽の 0 件集計を表示しない。
  */
 export function normalizeResults(raw: unknown): SurveyResults {
-  if (!isRecord(raw)) {
-    throw new ApiError('集計データの形式が不正です', 200, 'INVALID_RESPONSE');
-  }
-  const community = isRecord(raw.communityAffiliation) ? raw.communityAffiliation : {};
-  const jobRole = isRecord(raw.jobRole) ? raw.jobRole : {};
-  const rating = isRecord(raw.eventRating) ? raw.eventRating : {};
-  const distribution = isRecord(rating.distribution) ? rating.distribution : {};
+  if (!isRecord(raw)) throw invalidResults('data がオブジェクトではありません');
 
-  const communityAffiliation: Record<string, number> = {};
-  for (const key of [...COMMUNITIES, NO_COMMUNITY_KEY]) {
-    communityAffiliation[key] = toCount(community[key]);
-  }
-  const jobRoleCounts: Record<string, number> = {};
-  for (const key of JOB_ROLES) {
-    jobRoleCounts[key] = toCount(jobRole[key]);
-  }
-  const ratingDistribution: Record<string, number> = {};
-  for (const key of RATINGS) {
-    ratingDistribution[String(key)] = toCount(distribution[String(key)]);
-  }
+  if (!isCount(raw.totalResponses)) throw invalidResults('totalResponses が非負整数ではありません');
 
-  const averageRaw = rating.average;
-  const average = typeof averageRaw === 'number' && Number.isFinite(averageRaw) ? averageRaw : 0;
+  const communityAffiliation = requireCounts(
+    raw.communityAffiliation,
+    [...COMMUNITIES, NO_COMMUNITY_KEY],
+    'communityAffiliation',
+  );
+  const jobRole = requireCounts(raw.jobRole, JOB_ROLES, 'jobRole');
 
-  const feedback = Array.isArray(raw.feedback)
-    ? raw.feedback.flatMap((entry) => {
-        if (!isRecord(entry) || typeof entry.feedback !== 'string') return [];
-        return [
-          {
-            id: typeof entry.id === 'string' ? entry.id : '',
-            feedback: entry.feedback,
-            timestamp: typeof entry.timestamp === 'string' ? entry.timestamp : '',
-          },
-        ];
-      })
-    : [];
+  if (!isRecord(raw.eventRating)) throw invalidResults('eventRating がオブジェクトではありません');
+  const averageRaw = raw.eventRating.average;
+  if (typeof averageRaw !== 'number' || !Number.isFinite(averageRaw) || averageRaw < 0) {
+    throw invalidResults('eventRating.average が数値ではありません');
+  }
+  const distribution = requireCounts(
+    raw.eventRating.distribution,
+    RATINGS.map((r) => String(r)),
+    'eventRating.distribution',
+  );
+
+  if (!Array.isArray(raw.feedback)) throw invalidResults('feedback が配列ではありません');
+  const feedback = raw.feedback.map((entry, index) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry.id !== 'string' ||
+      typeof entry.feedback !== 'string' ||
+      typeof entry.timestamp !== 'string'
+    ) {
+      throw invalidResults(`feedback[${index}] の形式が不正です`);
+    }
+    return { id: entry.id, feedback: entry.feedback, timestamp: entry.timestamp };
+  });
 
   return {
-    totalResponses: toCount(raw.totalResponses),
+    totalResponses: raw.totalResponses,
     communityAffiliation,
-    jobRole: jobRoleCounts,
-    eventRating: { average, distribution: ratingDistribution },
+    jobRole,
+    eventRating: { average: averageRaw, distribution },
     feedback,
   };
 }
 
 /** GET /api/surveys/results */
 export async function fetchResults(signal?: AbortSignal): Promise<SurveyResults> {
-  const response = await request(
+  const { ok, status, body } = await request(
     '/surveys/results',
     { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' },
     signal,
   );
-  const body = await readJson(response);
-  if (!response.ok) {
-    throw errorFromResponse(response.status, body);
+  if (!ok) {
+    throw errorFromResponse(status, body);
   }
   if (isRecord(body) && body.success === true) {
     return normalizeResults(body.data);
   }
-  throw new ApiError('サーバーから想定外の応答が返されました', response.status, 'INVALID_RESPONSE');
+  throw new ApiError('サーバーから想定外の応答が返されました', status, 'INVALID_RESPONSE');
 }

@@ -39,8 +39,11 @@ const unique = <T,>(items: readonly T[]): T[] => Array.from(new Set(items));
 
 export const needsJobRoleOther = (jobRole: readonly JobRole[]): boolean => jobRole.includes(OTHER_JOB_ROLE);
 
-/** 文字数は Unicode コードポイント単位で数える（サロゲートペアを 1 文字扱い） */
-export const countChars = (text: string): number => Array.from(text).length;
+/**
+ * 文字数は UTF-16 コード単位で数える（バックエンドの .NET `string.Length` と同一基準）。
+ * 絵文字などのサロゲートペアは 2 文字として扱われる。
+ */
+export const countChars = (text: string): number => text.length;
 
 export function validateDraft(draft: SurveyDraft): SurveyErrors {
   const errors: SurveyErrors = {};

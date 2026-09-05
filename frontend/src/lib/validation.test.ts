@@ -55,9 +55,24 @@ describe('validateDraft', () => {
 });
 
 describe('countChars', () => {
-  it('サロゲートペアを 1 文字として数える', () => {
-    expect(countChars('𠮷野家')).toBe(3);
+  it('UTF-16 コード単位で数える（サロゲートペアは 2 文字）', () => {
+    expect(countChars('𠮷野家')).toBe(4);
+    expect(countChars('😀')).toBe(2);
     expect(countChars('')).toBe(0);
+  });
+});
+
+describe('絵文字を含む上限境界（バックエンドの string.Length と一致）', () => {
+  it('その他の職種: 絵文字 50 個（100 コード単位）は通り、あ 99 + 絵文字 1（101）は弾く', () => {
+    const ok = validateDraft({ ...validDraft(), jobRole: ['その他'], jobRoleOther: '😀'.repeat(50) });
+    expect(ok.jobRoleOther).toBeUndefined();
+    const ng = validateDraft({ ...validDraft(), jobRole: ['その他'], jobRoleOther: 'あ'.repeat(99) + '😀' });
+    expect(ng.jobRoleOther).toMatch(/100 文字以内/);
+  });
+
+  it('フィードバック: 絵文字 500 個（1000 コード単位）は通り、あ 999 + 絵文字 1（1001）は弾く', () => {
+    expect(validateDraft({ ...validDraft(), feedback: '😀'.repeat(500) }).feedback).toBeUndefined();
+    expect(validateDraft({ ...validDraft(), feedback: 'あ'.repeat(999) + '😀' }).feedback).toMatch(/1000 文字以内/);
   });
 });
 

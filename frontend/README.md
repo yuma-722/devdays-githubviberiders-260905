@@ -69,9 +69,13 @@ npm run dev        # http://localhost:3000 （ポート固定）
 - `jobRole`: 1 件以上必須（7 種類）
 - `jobRoleOther`: 「その他」選択時は必須、100 文字以内
 - `eventRating`: 1〜5 の整数、必須
-- `feedback`: 任意、1000 文字以内（文字数はコードポイント単位）
+- `feedback`: 任意、1000 文字以内
+
+文字数は UTF-16 コード単位で数えます（バックエンド .NET の `string.Length` と同一基準。絵文字などのサロゲートペアは 2 文字）。`maxLength` 属性・文字数カウンター・検証のいずれも同じ基準です。
 
 API エラー時にサンプルデータや偽の成功表示へフォールバックすることはありません。
+集計結果も README の契約（`totalResponses`、全選択肢・全評価のキー、`average`、`feedback` 配列）が欠けている・型が壊れている場合は `INVALID_RESPONSE` として失敗表示にし、偽の 0 件集計は表示しません。
+リクエストは 15 秒でタイムアウトし、ヘッダー受信後の本文読み込みまでを対象とします。
 
 ## ブラウザ E2E 向けアクセシブル名一覧
 
@@ -119,7 +123,7 @@ npm test
 ```
 
 - `src/lib/validation.test.ts` — 入力検証とリクエスト整形（重複除去、その他の扱い、文字数上限）
-- `src/lib/api.test.ts` — API クライアント（201 / 400 / 422 / 500、ネットワーク断、タイムアウト、不正レスポンス、結果の正規化）
+- `src/lib/api.test.ts` — API クライアント（201 / 400 / 422 / 500、ネットワーク断、ヘッダー前・本文読み込み中のタイムアウト、外部 abort、不正レスポンス、集計データの契約検証）
 - `src/components/SurveyForm.test.tsx` — フォームの操作・送信・二重送信防止・失敗時の入力保持
 - `src/components/ResultsView.test.tsx` — 読み込み / 空 / エラー / 表示
 - `src/App.test.tsx` — ルーティングとナビゲーション
