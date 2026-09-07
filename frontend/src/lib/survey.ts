@@ -1,9 +1,3 @@
-export const COMMUNITIES = ['VS Code Meetup', 'GitHub dockyard'] as const;
-export type Community = (typeof COMMUNITIES)[number];
-
-/** 集計結果でコミュニティ未所属を表すキー */
-export const NO_COMMUNITY_KEY = 'どちらでもない' as const;
-
 export const JOB_ROLES = [
   'フロントエンドエンジニア',
   'バックエンドエンジニア',
@@ -32,7 +26,6 @@ export const FEEDBACK_MAX = 1000;
 
 /** POST /api/surveys のリクエストボディ */
 export interface SurveyRequest {
-  communityAffiliation: Community[];
   jobRole: JobRole[];
   jobRoleOther?: string;
   eventRating: EventRating;
@@ -60,7 +53,6 @@ export interface FeedbackEntry {
 /** GET /api/surveys/results の data */
 export interface SurveyResults {
   totalResponses: number;
-  communityAffiliation: Record<string, number>;
   jobRole: Record<string, number>;
   eventRating: {
     average: number;

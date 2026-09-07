@@ -2,12 +2,9 @@ import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'rea
 import { ApiError, submitSurvey } from '../lib/api';
 import { ROUTE_HASH } from '../lib/router';
 import {
-  COMMUNITIES,
   FEEDBACK_MAX,
   JOB_ROLES,
   JOB_ROLE_OTHER_MAX,
-  NO_COMMUNITY_KEY,
-  type Community,
   type JobRole,
 } from '../lib/survey';
 import {
@@ -29,17 +26,16 @@ type SubmitState =
   | { kind: 'success'; surveyId: string; message: string }
   | { kind: 'error'; message: string; code: string; status: number };
 
-const FIELD_ORDER: SurveyField[] = ['communityAffiliation', 'jobRole', 'jobRoleOther', 'eventRating', 'feedback'];
+const FIELD_ORDER: SurveyField[] = ['jobRole', 'jobRoleOther', 'eventRating', 'feedback'];
 
 const FIELD_TITLES: Record<SurveyField, string> = {
-  communityAffiliation: '所属コミュニティ',
   jobRole: '職種',
   jobRoleOther: 'その他の職種',
   eventRating: 'イベントの満足度',
   feedback: 'ご意見・ご感想',
 };
 
-const STATION_COUNT = 4;
+const STATION_COUNT = 3;
 
 const toggle = <T,>(list: readonly T[], item: T, on: boolean): T[] =>
   on ? (list.includes(item) ? [...list] : [...list, item]) : list.filter((x) => x !== item);
@@ -51,8 +47,6 @@ interface SurveyFormProps {
 
 export function SurveyForm({ onSubmitted }: SurveyFormProps) {
   const [draft, setDraft] = useState<SurveyDraft>(emptyDraft);
-  // 「どちらでもない」を明示的に選んだか（空配列と区別して進行表示に使う）
-  const [communityNone, setCommunityNone] = useState(false);
   const [feedbackTouched, setFeedbackTouched] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<SubmitState>({ kind: 'idle' });
@@ -69,7 +63,6 @@ export function SurveyForm({ onSubmitted }: SurveyFormProps) {
 
   // 各駅（設問）の通過状態: 回答済みで、その設問に誤りがない
   const stationDone = {
-    community: (draft.communityAffiliation.length > 0 || communityNone) && !errors.communityAffiliation,
     jobRole: draft.jobRole.length > 0 && !errors.jobRole && !errors.jobRoleOther,
     rating: draft.eventRating !== null && !errors.eventRating,
     feedback: (feedbackTouched || draft.feedback.length > 0) && !errors.feedback,
@@ -119,7 +112,6 @@ export function SurveyForm({ onSubmitted }: SurveyFormProps) {
 
   const reset = () => {
     setDraft(emptyDraft());
-    setCommunityNone(false);
     setFeedbackTouched(false);
     setAttempt(0);
     setState({ kind: 'idle' });
@@ -193,66 +185,8 @@ export function SurveyForm({ onSubmitted }: SurveyFormProps) {
       )}
 
       <ol className="route" aria-label="設問">
-        {/* 駅 1: 所属コミュニティ */}
-        <li className="station" data-done={stationDone.community} data-index={1}>
-          <span className="station__mark" aria-hidden="true" />
-          <fieldset
-            className="field"
-            id={`${uid}-communityAffiliation`}
-            aria-describedby={`${uid}-community-hint`}
-            disabled={submitting}
-          >
-            <legend className="field__legend">
-              所属コミュニティ <span className="tag">複数選択可</span>
-            </legend>
-            <p className="field__hint" id={`${uid}-community-hint`}>
-              所属しているコミュニティをすべて選んでください。
-            </p>
-            <div className="choices">
-              {COMMUNITIES.map((community: Community) => {
-                const id = `${uid}-community-${community.replace(/\s+/g, '-')}`;
-                const checked = draft.communityAffiliation.includes(community);
-                return (
-                  <label key={community} className="choice" htmlFor={id} data-checked={checked}>
-                    <input
-                      type="checkbox"
-                      id={id}
-                      name="communityAffiliation"
-                      value={community}
-                      checked={checked}
-                      onChange={(e) => {
-                        setCommunityNone(false);
-                        setDraft((d) => ({
-                          ...d,
-                          communityAffiliation: toggle(d.communityAffiliation, community, e.target.checked),
-                        }));
-                      }}
-                    />
-                    <span className="choice__label">{community}</span>
-                  </label>
-                );
-              })}
-              <label className="choice choice--quiet" htmlFor={`${uid}-community-none`} data-checked={communityNone}>
-                <input
-                  type="checkbox"
-                  id={`${uid}-community-none`}
-                  name="communityAffiliationNone"
-                  checked={communityNone}
-                  onChange={(e) => {
-                    setCommunityNone(e.target.checked);
-                    if (e.target.checked) {
-                      setDraft((d) => ({ ...d, communityAffiliation: [] }));
-                    }
-                  }}
-                />
-                <span className="choice__label">{NO_COMMUNITY_KEY}</span>
-              </label>
-            </div>
-          </fieldset>
-        </li>
-
-        {/* 駅 2: 職種 */}
-        <li className="station" data-done={stationDone.jobRole} data-index={2}>
+        {/* 駅 1: 職種 */}
+        <li className="station" data-done={stationDone.jobRole} data-index={1}>
           <span className="station__mark" aria-hidden="true" />
           <fieldset
             className="field"
@@ -325,8 +259,8 @@ export function SurveyForm({ onSubmitted }: SurveyFormProps) {
           </fieldset>
         </li>
 
-        {/* 駅 3: 満足度 */}
-        <li className="station" data-done={stationDone.rating} data-index={3}>
+        {/* 駅 2: 満足度 */}
+        <li className="station" data-done={stationDone.rating} data-index={2}>
           <span className="station__mark" aria-hidden="true" />
           <fieldset className="field" id={`${uid}-eventRating`} disabled={submitting}>
             <legend className="field__legend">
@@ -350,8 +284,8 @@ export function SurveyForm({ onSubmitted }: SurveyFormProps) {
           </fieldset>
         </li>
 
-        {/* 駅 4: 自由記述 */}
-        <li className="station station--last" data-done={stationDone.feedback} data-index={4}>
+        {/* 駅 3: 自由記述 */}
+        <li className="station station--last" data-done={stationDone.feedback} data-index={3}>
           <span className="station__mark" aria-hidden="true" />
           <div className="field" id={`${uid}-feedback-field`}>
             <label className="field__legend" htmlFor={`${uid}-feedback`}>

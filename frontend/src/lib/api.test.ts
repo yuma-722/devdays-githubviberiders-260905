@@ -3,7 +3,6 @@ import { ApiError, fetchResults, normalizeResults, resolveApiBase, submitSurvey 
 import type { SurveyRequest } from './survey';
 
 const payload: SurveyRequest = {
-  communityAffiliation: [],
   jobRole: ['DevOpsエンジニア'],
   eventRating: 3,
 };
@@ -91,7 +90,6 @@ describe('submitSurvey', () => {
 
 const fullData = () => ({
   totalResponses: 50,
-  communityAffiliation: { 'VS Code Meetup': 20, 'GitHub dockyard': 15, どちらでもない: 5 },
   jobRole: {
     フロントエンドエンジニア: 15,
     バックエンドエンジニア: 12,
@@ -107,7 +105,6 @@ const fullData = () => ({
 
 const emptyData = () => ({
   totalResponses: 0,
-  communityAffiliation: { 'VS Code Meetup': 0, 'GitHub dockyard': 0, どちらでもない: 0 },
   jobRole: {
     フロントエンドエンジニア: 0,
     バックエンドエンジニア: 0,
@@ -125,7 +122,6 @@ describe('normalizeResults', () => {
   it('README のレスポンス形式をそのまま受け入れる', () => {
     const data = normalizeResults(fullData());
     expect(data.totalResponses).toBe(50);
-    expect(data.communityAffiliation['どちらでもない']).toBe(5);
     expect(data.jobRole['その他']).toBe(3);
     expect(data.eventRating.average).toBe(4.2);
     expect(data.eventRating.distribution['5']).toBe(19);
@@ -135,7 +131,6 @@ describe('normalizeResults', () => {
   it('0 件時の契約（全キー 0・feedback 空）を受け入れる', () => {
     const data = normalizeResults(emptyData());
     expect(data.totalResponses).toBe(0);
-    expect(Object.keys(data.communityAffiliation)).toEqual(['VS Code Meetup', 'GitHub dockyard', 'どちらでもない']);
     expect(Object.keys(data.jobRole)).toHaveLength(7);
     expect(Object.values(data.jobRole).every((v) => v === 0)).toBe(true);
     expect(Object.keys(data.eventRating.distribution)).toEqual(['1', '2', '3', '4', '5']);
@@ -145,10 +140,11 @@ describe('normalizeResults', () => {
   it('契約外の余分なキーは無視する', () => {
     const data = normalizeResults({
       ...fullData(),
-      communityAffiliation: { ...fullData().communityAffiliation, 未知: 99 },
+      jobRole: { ...fullData().jobRole, 未知: 99 },
       extra: true,
     });
-    expect(Object.keys(data.communityAffiliation)).toEqual(['VS Code Meetup', 'GitHub dockyard', 'どちらでもない']);
+    expect(Object.keys(data.jobRole)).toHaveLength(7);
+    expect(data).not.toHaveProperty('extra');
   });
 
   it('data が空オブジェクトなら INVALID_RESPONSE（偽の 0 件集計にしない）', () => {
@@ -162,11 +158,6 @@ describe('normalizeResults', () => {
     ['totalResponses 欠落', { ...fullData(), totalResponses: undefined }],
     ['totalResponses が文字列', { ...fullData(), totalResponses: '50' }],
     ['totalResponses が負数', { ...fullData(), totalResponses: -1 }],
-    ['communityAffiliation 欠落', { ...fullData(), communityAffiliation: undefined }],
-    [
-      'communityAffiliation に「どちらでもない」がない',
-      { ...fullData(), communityAffiliation: { 'VS Code Meetup': 1, 'GitHub dockyard': 1 } },
-    ],
     ['jobRole の一部キー欠落', { ...fullData(), jobRole: { その他: 1 } }],
     ['jobRole の値が小数', { ...fullData(), jobRole: { ...fullData().jobRole, その他: 1.5 } }],
     ['eventRating 欠落', { ...fullData(), eventRating: undefined }],

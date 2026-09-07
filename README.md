@@ -89,17 +89,107 @@ Vite のプロキシを経由して、空の集計、400/422 エラー、文字�
 
 ## Azure での設定
 
-フロントエンドのビルド出力は `frontend/build` です。
-既存の Static Web Apps ワークフローは GitHub の Repository variable `VITE_API_BASE_URL` をビルド時に渡します。
-別オリジンの Functions を利用する場合は、`https://<Function App のホスト名>/api` を設定し、
-Functions 側の CORS でフロントエンドのオリジンを許可してください。
-未設定なら同一オリジンの `/api` を使用するため、Static Web Apps と既存 Functions の連携設定が必要です。
-`VITE_` 変数はブラウザに公開されるので、接続文字列・関数キーなどの機密情報は含めないでください。
+### 本番リソース
 
-バックエンドの本番保存先は Cosmos DB です。アカウント `cosmos-ghdevdays-260320` を使用する場合も、
-エンドポイント・データベース・コンテナー・アクセス権はバックエンドの README に従って設定してください。
-コンテナーのパーティションキーは `/date` で、回答にはサーバーが UTC 日付 `yyyy-MM-dd` を付与します。
-File モードは本番では利用できません。デプロイ用ワークフローの実行には Azure の既存リソース・認証設定が別途必要です。
+サブスクリプションは **Azure subscription 1**、リソースグループは **rg-ghdevdays-260320** です。
+既存の別イベント用 Static Web Apps `stapp-ghdevdays-260320` は本アプリのデプロイ対象ではありません。
+
+| 用途 | リソース・値 |
+| --- | --- |
+| フロントエンド | `swa-devdays-260905`（Standard） |
+| 公開 URL | <https://proud-field-021987600.6.azurestaticapps.net> |
+| バックエンド | `func-devdays-survey`（Linux / Flex Consumption、.NET 10 isolated） |
+| API ベース URL | `https://func-devdays-survey-dvd0bzbje3ejfcfv.japaneast-01.azurewebsites.net/api` |
+| Cosmos DB アカウント | `cosmos-ghdevdays-260320` |
+| データベース / コンテナー | `ghdevdays` / `survey` |
+| パーティションキー | `/date`（サーバー生成の UTC 日付 `yyyy-MM-dd`） |
+
+### Functions の環境変数
+
+Azure Portal の **func-devdays-survey → 設定 → 環境変数 → アプリ設定** に設定します。
+名前の階層区切りには、Linux でも機能するダブルアンダースコア `__` を使用してください。
+
+| 名前 | 本番の値・設定方法 |
+| --- | --- |
+| `AZURE_FUNCTIONS_ENVIRONMENT` | `Production` |
+| `SurveyStorage__Provider` | `Cosmos` |
+| `Cosmos__Endpoint` | `https://cosmos-ghdevdays-260320.documents.azure.com:443/` |
+| `Cosmos__DatabaseName` | `ghdevdays` |
+| `Cosmos__ContainerName` | `survey` |
+| `AzureWebJobsStorage` | 作成時のホストストレージ接続文字列を保持。秘密情報のためソースやログに出さない |
+| `DEPLOYMENT_STORAGE_CONNECTION_STRING` | 作成時のデプロイ用 Blob ストレージ接続文字列を保持。値を公開しない |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | 既存の Application Insights 接続設定を保持 |
+
+この本番環境は **Flex Consumption** です。ランタイムは環境変数ではなく
+リソースの `properties.functionAppConfig.runtime` を `name=dotnet-isolated` / `version=10.0` に設定します。
+`FUNCTIONS_WORKER_RUNTIME`、`FUNCTIONS_WORKER_RUNTIME_VERSION`、`FUNCTIONS_EXTENSION_VERSION`、
+`WEBSITE_RUN_FROM_PACKAGE`、`SCM_DO_BUILD_DURING_DEPLOYMENT` は本番 Flex 環境に追加しないでください。
+`FUNCTIONS_WORKER_RUNTIME=dotnet-isolated` は上記の**ローカル起動**で使用する設定です。
+既存の `functionAppConfig.deployment.storage` とストレージ接続設定を削除・置換しないでください。
+
+`SurveyStorage__FilePath` はローカル File モード専用で、本番には設定しません。
+File モードは Development 以外では起動エラーになり、Cosmos DB の障害時にも切り替わりません。
+
+### Cosmos DB の認証と CORS
+
+**func-devdays-survey → ID → システム割り当て**を有効にし、アプリの `DefaultAzureCredential` がその ID を使用します。
+この構成では Functions の環境変数 `AZURE_CLIENT_ID`、クライアントシークレット、Cosmos のアカウントキーは不要です。
+後述の GitHub 用 `AZURE_CLIENT_ID` を Functions に設定しないでください。
+
+Functions の実行 ID に、Cosmos の **Cosmos DB Built-in Data Contributor**
+（ロール ID `00000000-0000-0000-0000-000000000002`）を
+`/dbs/ghdevdays/colls/survey` スコープで付与します。
+これは Cosmos の**データプレーン**のロールであり、Azure IAM の `Contributor` では代用できません。
+新しい回答の保存とクエリの読み取りに使用します。既存レコードの削除・一括移行は不要で、使わなくなった追加フィールドは読み飛ばします。
+
+Functions の **API → CORS** で `https://proud-field-021987600.6.azurestaticapps.net` を許可します。
+`*` は不要です。フロントはこの API へ直接通信し、SWA の `/api` バックエンド連携には依存しません。
+
+### GitHub Actions の変数・シークレット
+
+リポジトリの **Settings → Secrets and variables → Actions** で設定します。
+次の公開 ID は Repository **variables**、SWA のデプロイトークンのみ Repository **secret** です。
+
+| 種類 | 名前 | 値・用途 |
+| --- | --- | --- |
+| Variable | `VITE_API_BASE_URL` | `https://func-devdays-survey-dvd0bzbje3ejfcfv.japaneast-01.azurewebsites.net/api` |
+| Variable | `AZURE_CLIENT_ID` | `77416e90-b34a-48d4-924d-c91172df3a51`（デプロイ専用 ID のクライアント ID） |
+| Variable | `AZURE_TENANT_ID` | `164bdd76-e1fc-43d1-8d2d-b0c6c87ac808` |
+| Variable | `AZURE_SUBSCRIPTION_ID` | `92b0d2db-6657-41a8-b1a0-9299dd0b4a6d` |
+| Secret | `AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_021987600` | `swa-devdays-260905` の既存デプロイトークン。値を README やコードに記載しない |
+
+`VITE_API_BASE_URL` は**ビルド時**に埋め込まれます。SWA の Azure 側アプリ設定に追加するだけでは反映されません。
+変更した場合はフロントを再ビルド・再デプロイしてください。
+未設定なら同一オリジン `/api` となるため、この本番構成では必ず設定します。
+`VITE_` 変数はブラウザに公開されるので、接続文字列・関数キーなどの秘密情報は含めないでください。
+
+Functions の CI 認証には、ユーザー割り当てマネージド ID **id-devdays-github-deploy** の OIDC を使用します。
+フェデレーション資格情報 `github-main` は次のように設定します。
+
+| 設定 | 値 |
+| --- | --- |
+| Issuer | `https://token.actions.githubusercontent.com` |
+| Subject | `repo:yuma-722/devdays-githubviberiders-260905:ref:refs/heads/main` |
+| Audience | `api://AzureADTokenExchange` |
+| Azure IAM ロール | `Website Contributor`、対象 `func-devdays-survey` リソースだけのスコープ |
+
+このデプロイ ID に Cosmos のデータアクセス権限は付与しません。Functions の実行 ID と CI のデプロイ ID を分離しています。
+GitHub Actions は `id-token: write` で短時間のトークンを取得するため、Azure の長期クライアントシークレットは不要です。
+
+### 本番への反映
+
+`main` に変更を反映すると、フロント・バックそれぞれの GitHub Actions がテスト後にデプロイします。
+フロントは Node.js 22 で `npm ci`、`npm test`、`npm run build` を実行し、`frontend/build` を配信します。
+バックは .NET テスト後に発行し、`.azurefunctions` を含む ZIP を Flex Consumption にデプロイします。
+バックの変更とデプロイ用ワークフローの変更がない場合、バックの自動デプロイは実行しません。
+手動再実行は GitHub の Actions で対象ワークフローを選び、**Run workflow → main** を指定します。
+
+Functions のデプロイ権限は `main` に限定しています。PR プレビューは本番 API を参照するため、
+プレビュー画面から送信しても本番の回答として保存されることに注意してください。
+本番でテスト用の回答を作らない確認には、集計 API の GET と、無効な入力に対する POST の 422 応答を使用します。
+
+参考: [Functions の GitHub Actions デプロイ](https://learn.microsoft.com/azure/azure-functions/functions-how-to-github-actions)、
+[Flex Consumption のアプリ設定](https://learn.microsoft.com/azure/azure-functions/functions-app-settings#flex-consumption-plan-deprecations)。
 
 ## API仕様書
 
@@ -121,7 +211,6 @@ http://localhost:3000/api
 
 ```json
 {
-  "communityAffiliation": ["VS Code Meetup", "GitHub dockyard"],
   "jobRole": ["フロントエンドエンジニア", "バックエンドエンジニア", "フルスタックエンジニア", "DevOpsエンジニア", "データエンジニア", "モバイルエンジニア", "その他"],
   "jobRoleOther": "string",
   "eventRating": 5,
@@ -131,7 +220,6 @@ http://localhost:3000/api
 
 **フィールド説明**
 
-- `communityAffiliation`: 複数選択可能な配列形式。参加者が所属しているコミュニティを全て選択。どちらでもない場合は空配列 `[]` を指定
 - `jobRole`: 複数選択可能な配列形式。参加者の職種を全て選択（複数の職種を兼務している場合を考慮）
 - `jobRoleOther`: `jobRole`に「その他」が含まれている場合に具体的な職種を入力（最大100文字）
 - `eventRating`: 1-5の整数（1=非常に不満、5=非常に満足）
@@ -170,11 +258,6 @@ http://localhost:3000/api
   "success": true,
   "data": {
     "totalResponses": 50,
-    "communityAffiliation": {
-      "VS Code Meetup": 20,
-      "GitHub dockyard": 15,
-      "どちらでもない": 5
-    },
     "jobRole": {
       "フロントエンドエンジニア": 15,
       "バックエンドエンジニア": 12,
@@ -213,7 +296,6 @@ http://localhost:3000/api
 interface Survey {
   id: string;
   date: string; // サーバーが生成する UTC 日付（yyyy-MM-dd）。Cosmos DB のパーティションキー
-  communityAffiliation: ("VS Code Meetup" | "GitHub dockyard")[];
   jobRole: (
     | "フロントエンドエンジニア"
     | "バックエンドエンジニア"
@@ -235,7 +317,6 @@ interface Survey {
 
 ### 必須フィールド
 
-- `communityAffiliation`: 必須（配列形式。どちらのコミュニティにも所属していない場合は空配列 `[]` を指定）
 - `jobRole`: 必須（配列形式、1つ以上選択）
 - `eventRating`: 必須（1-5の整数）
 

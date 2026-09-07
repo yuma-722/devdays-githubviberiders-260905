@@ -15,7 +15,6 @@ const fetchMock = vi.mocked(fetchResults);
 
 const sample: SurveyResults = {
   totalResponses: 50,
-  communityAffiliation: { 'VS Code Meetup': 20, 'GitHub dockyard': 15, どちらでもない: 5 },
   jobRole: {
     フロントエンドエンジニア: 15,
     バックエンドエンジニア: 12,
@@ -34,7 +33,6 @@ const sample: SurveyResults = {
 
 const emptyResults: SurveyResults = {
   totalResponses: 0,
-  communityAffiliation: { 'VS Code Meetup': 0, 'GitHub dockyard': 0, どちらでもない: 0 },
   jobRole: {
     フロントエンドエンジニア: 0,
     バックエンドエンジニア: 0,
@@ -70,11 +68,6 @@ describe('ResultsView', () => {
 
     expect(await screen.findByTestId('total-responses')).toHaveTextContent('50件');
     expect(screen.getByTestId('rating-average')).toHaveTextContent('4.2');
-
-    const community = screen.getByRole('region', { name: '所属コミュニティ' });
-    expect(within(community).getByText('どちらでもない')).toBeInTheDocument();
-    expect(within(community).getAllByRole('listitem')).toHaveLength(3);
-    expect(community).toHaveTextContent('20件');
 
     const jobRole = screen.getByRole('region', { name: '職種' });
     expect(within(jobRole).getAllByRole('listitem')).toHaveLength(7);

@@ -27,7 +27,7 @@
 - **アンケートAPI**
   - POST `/surveys`: 回答登録
   - GET `/surveys/results`: 集計取得
-  - 必須: `communityAffiliation`（配列, 空配列可）, `jobRole`（配列, 1つ以上）, `eventRating`（1-5）
+  - 必須: `jobRole`（配列, 1つ以上）, `eventRating`（1-5）
   - オプション: `jobRoleOther`（"その他"時必須, 100字以内）, `feedback`（1000字以内）
   - レスポンス: `success`, `message`/`error`, `surveyId`/`code`
   - ステータス: 200, 201, 400, 422, 500

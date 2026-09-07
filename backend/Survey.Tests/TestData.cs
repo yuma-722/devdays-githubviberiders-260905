@@ -12,7 +12,6 @@ internal static class TestData
 {
     internal static Dictionary<string, object?> Input() => new()
     {
-        ["communityAffiliation"] = Array.Empty<string>(),
         ["jobRole"] = new[] { SurveyOptions.JobRoles[0] },
         ["eventRating"] = 5
     };
@@ -23,7 +22,7 @@ internal static class TestData
     internal static MemoryStream Stream(string json) => new(Encoding.UTF8.GetBytes(json));
 
     internal static SurveyDocument Document(int rating = 5, string? feedback = null) =>
-        SurveyDocument.Create(new SurveyInput([], [SurveyOptions.JobRoles[0]], null, rating, feedback),
+        SurveyDocument.Create(new SurveyInput([SurveyOptions.JobRoles[0]], null, rating, feedback),
             new FixedClock());
 }
 

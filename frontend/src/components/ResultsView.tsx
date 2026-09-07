@@ -2,9 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, fetchResults } from '../lib/api';
 import { ROUTE_HASH } from '../lib/router';
 import {
-  COMMUNITIES,
   JOB_ROLES,
-  NO_COMMUNITY_KEY,
   RATING_LABELS,
   RATINGS,
   type EventRating,
@@ -222,34 +220,17 @@ function ResultsBody({ data }: { data: SurveyResults }) {
         </ol>
       </section>
 
-      <div className="block-grid">
-        <section className="block" aria-labelledby="community-heading">
-          <h3 id="community-heading" className="block__title">
-            所属コミュニティ
-          </h3>
-          <BarList
-            id="community-heading"
-            total={total}
-            items={[...COMMUNITIES, NO_COMMUNITY_KEY].map((key) => ({
-              key,
-              label: key,
-              count: data.communityAffiliation[key] ?? 0,
-            }))}
-          />
-        </section>
-
-        <section className="block" aria-labelledby="jobrole-heading">
-          <h3 id="jobrole-heading" className="block__title">
-            職種
-          </h3>
-          <p className="block__note">複数選択のため合計は回答数を超えることがあります。</p>
-          <BarList
-            id="jobrole-heading"
-            total={total}
-            items={JOB_ROLES.map((key) => ({ key, label: key, count: data.jobRole[key] ?? 0 }))}
-          />
-        </section>
-      </div>
+      <section className="block" aria-labelledby="jobrole-heading">
+        <h3 id="jobrole-heading" className="block__title">
+          職種
+        </h3>
+        <p className="block__note">複数選択のため合計は回答数を超えることがあります。</p>
+        <BarList
+          id="jobrole-heading"
+          total={total}
+          items={JOB_ROLES.map((key) => ({ key, label: key, count: data.jobRole[key] ?? 0 }))}
+        />
+      </section>
 
       <section className="block" aria-labelledby="feedback-heading">
         <h3 id="feedback-heading" className="block__title">

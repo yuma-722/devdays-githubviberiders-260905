@@ -7,21 +7,18 @@ public sealed class ValidationTests
 {
     public static IEnumerable<object[]> InvalidFields()
     {
-        foreach (string field in new[] { "communityAffiliation", "jobRole", "eventRating" })
+        foreach (string field in new[] { "jobRole", "eventRating" })
         {
             Dictionary<string, object?> missing = TestData.Input();
             missing.Remove(field);
             yield return [TestData.Json(missing), 422];
             yield return [With(field, null), 422];
         }
-        foreach (string field in new[] { "communityAffiliation", "jobRole" })
+        foreach (object value in new object[] { "invalid", 1, true, new { }, new object?[] { null }, new[] { 1 } })
         {
-            foreach (object value in new object[] { "invalid", 1, true, new { }, new object?[] { null }, new[] { 1 } })
-            {
-                yield return [With(field, value), 400];
-            }
-            yield return [With(field, new[] { "unknown" }), 422];
+            yield return [With("jobRole", value), 400];
         }
+        yield return [With("jobRole", new[] { "unknown" }), 422];
         yield return [With("jobRole", Array.Empty<string>()), 422];
         foreach (object value in new object[] { "5", 1.5, true, new[] { 5 }, new { }, 2147483648L })
         {
@@ -76,14 +73,12 @@ public sealed class ValidationTests
     public async Task AcceptsBoundariesAndDeduplicates(int rating)
     {
         Dictionary<string, object?> input = TestData.Input();
-        input["communityAffiliation"] = new[] { SurveyOptions.Communities[0], SurveyOptions.Communities[0] };
         input["jobRole"] = new[] { SurveyOptions.OtherJobRole, SurveyOptions.OtherJobRole };
         input["jobRoleOther"] = new string('a', 100);
         input["feedback"] = new string('a', 1000);
         input["eventRating"] = rating;
         using MemoryStream body = TestData.Stream(TestData.Json(input));
         SurveyInput result = await SurveyRequestParser.ParseAsync(body);
-        Assert.Single(result.CommunityAffiliation);
         Assert.Single(result.JobRole);
         Assert.Equal(100, result.JobRoleOther!.Length);
         Assert.Equal(1000, result.Feedback!.Length);
@@ -94,15 +89,34 @@ public sealed class ValidationTests
     public async Task AcceptsAllChoicesAndOptionalNulls()
     {
         Dictionary<string, object?> input = TestData.Input();
-        input["communityAffiliation"] = SurveyOptions.Communities;
         input["jobRole"] = SurveyOptions.JobRoles;
         input["jobRoleOther"] = "講師";
         input["feedback"] = null;
         using MemoryStream body = TestData.Stream(TestData.Json(input));
         SurveyInput result = await SurveyRequestParser.ParseAsync(body);
-        Assert.Equal(2, result.CommunityAffiliation.Length);
         Assert.Equal(7, result.JobRole.Length);
         Assert.Null(result.Feedback);
+    }
+
+    [Theory]
+    [InlineData("[\"VS Code Meetup\"]")]
+    [InlineData("null")]
+    [InlineData("\"旧形式\"")]
+    public async Task IgnoresLegacyAndUnknownFieldsWithoutSavingThem(string legacyValue)
+    {
+        Dictionary<string, object?> input = TestData.Input();
+        input["communityAffiliation"] = JsonSerializer.Deserialize<JsonElement>(legacyValue);
+        input["unknownField"] = new { value = true };
+        using MemoryStream body = TestData.Stream(TestData.Json(input));
+        SurveyInput parsed = await SurveyRequestParser.ParseAsync(body);
+        SurveyDocument saved = SurveyDocument.Create(parsed, new FixedClock());
+        JsonElement parsedJson = JsonSerializer.SerializeToElement(parsed, SurveyJson.Options);
+        JsonElement savedJson = JsonSerializer.SerializeToElement(saved, SurveyJson.Options);
+        Assert.False(parsedJson.TryGetProperty("communityAffiliation", out _));
+        Assert.False(savedJson.TryGetProperty("communityAffiliation", out _));
+        Assert.False(savedJson.TryGetProperty("unknownField", out _));
+        Assert.Equal(new[] { SurveyOptions.JobRoles[0] }, saved.JobRole);
+        Assert.Equal(5, saved.EventRating);
     }
 
     [Fact]

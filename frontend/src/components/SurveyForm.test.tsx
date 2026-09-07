@@ -13,7 +13,6 @@ import { submitSurvey } from '../lib/api';
 const submitMock = vi.mocked(submitSurvey);
 
 const fillValidForm = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(screen.getByRole('checkbox', { name: 'VS Code Meetup' }));
   await user.click(screen.getByRole('checkbox', { name: 'バックエンドエンジニア' }));
   await user.click(screen.getByRole('radio', { name: '4: 満足' }));
   await user.type(screen.getByRole('textbox', { name: /ご意見・ご感想/ }), '楽しかったです');
@@ -31,7 +30,6 @@ describe('SurveyForm', () => {
   it('主要なコントロールが日本語のラベルで取得できる', () => {
     render(<SurveyForm />);
     expect(screen.getByRole('form', { name: 'イベントの感想を教えてください' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /所属コミュニティ/ })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /職種/ })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'イベントの満足度' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /ご意見・ご感想/ })).toBeInTheDocument();
@@ -79,26 +77,22 @@ describe('SurveyForm', () => {
     expect(screen.getByTestId('survey-id')).toHaveTextContent('id-001');
     expect(screen.getByRole('link', { name: '集計結果を見る' })).toHaveAttribute('href', '#/results');
     expect(submitMock).toHaveBeenCalledWith({
-      communityAffiliation: ['VS Code Meetup'],
       jobRole: ['バックエンドエンジニア'],
       eventRating: 4,
       feedback: '楽しかったです',
     });
   });
 
-  it('「どちらでもない」を選ぶとコミュニティは空配列で送信される', async () => {
+  it('必須の職種と評価だけで送信できる', async () => {
     const user = userEvent.setup();
     submitMock.mockResolvedValue({ success: true, message: 'ok', surveyId: 'id-002' });
     render(<SurveyForm />);
-    await user.click(screen.getByRole('checkbox', { name: 'GitHub dockyard' }));
-    await user.click(screen.getByRole('checkbox', { name: 'どちらでもない' }));
-    expect(screen.getByRole('checkbox', { name: 'GitHub dockyard' })).not.toBeChecked();
     await user.click(screen.getByRole('checkbox', { name: 'データエンジニア' }));
     await user.click(screen.getByRole('radio', { name: '3: どちらでもない' }));
     await user.click(screen.getByRole('button', { name: 'アンケートを送信' }));
 
     await screen.findByRole('heading', { name: 'ご回答ありがとうございました' });
-    expect(submitMock).toHaveBeenCalledWith(expect.objectContaining({ communityAffiliation: [] }));
+    expect(submitMock).toHaveBeenCalledWith({ jobRole: ['データエンジニア'], eventRating: 3 });
   });
 
   it('送信中はボタンが無効になり、二重送信されない', async () => {
@@ -159,14 +153,15 @@ describe('SurveyForm', () => {
     const user = userEvent.setup();
     render(<SurveyForm />);
     const progress = screen.getByText(/駅を通過/);
-    expect(progress).toHaveTextContent('0 / 4 駅を通過');
+    expect(progress).toHaveTextContent('0 / 3 駅を通過');
     await user.click(screen.getByRole('checkbox', { name: 'モバイルエンジニア' }));
     await user.click(screen.getByRole('radio', { name: '2: 不満' }));
-    expect(progress).toHaveTextContent('2 / 4 駅を通過');
+    expect(progress).toHaveTextContent('2 / 3 駅を通過');
     const stations = within(screen.getByRole('list', { name: '設問' })).getAllByRole('listitem');
+    expect(stations).toHaveLength(3);
+    expect(stations[0]).toHaveAttribute('data-done', 'true');
     expect(stations[1]).toHaveAttribute('data-done', 'true');
-    expect(stations[2]).toHaveAttribute('data-done', 'true');
-    expect(stations[0]).toHaveAttribute('data-done', 'false');
+    expect(stations[2]).toHaveAttribute('data-done', 'false');
   });
 
   it('評価はキーボード操作で選択できる', async () => {

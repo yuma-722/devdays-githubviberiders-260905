@@ -21,7 +21,6 @@ if (
   throw new Error('結合テストは http://localhost:<port>/api などのローカル API 専用です。');
 }
 
-const communityKeys = ['VS Code Meetup', 'GitHub dockyard', 'どちらでもない'];
 const jobKeys = [
   'フロントエンドエンジニア',
   'バックエンドエンジニア',
@@ -32,7 +31,6 @@ const jobKeys = [
   'その他',
 ];
 const validAnswer = {
-  communityAffiliation: [],
   jobRole: ['フロントエンドエンジニア'],
   eventRating: 5,
 };
@@ -61,7 +59,7 @@ async function getResults() {
   assert.equal(response.body.success, true);
   const data = response.body.data;
   assert.ok(Number.isInteger(data.totalResponses) && data.totalResponses >= 0);
-  assertCounts(data.communityAffiliation, communityKeys);
+  assert.deepEqual(Object.keys(data).sort(), ['eventRating', 'feedback', 'jobRole', 'totalResponses']);
   assertCounts(data.jobRole, jobKeys);
   assertCounts(data.eventRating.distribution, ['1', '2', '3', '4', '5']);
   assert.ok(Number.isFinite(data.eventRating.average));
@@ -81,7 +79,6 @@ test('実 HTTP API の登録・検証・集計契約', async (t) => {
     assert.equal(initial.eventRating.average, 0);
     assert.deepEqual(initial.feedback, []);
     for (const counts of [
-      initial.communityAffiliation,
       initial.jobRole,
       initial.eventRating.distribution,
     ]) {
@@ -93,14 +90,12 @@ test('実 HTTP API の登録・検証・集計契約', async (t) => {
     ['不正 JSON', '{', 400, true],
     ['JSON null', 'null', 400, true],
     ['JSON 配列', '[]', 400, true],
-    ['配列の型不正', { ...validAnswer, communityAffiliation: 'VS Code Meetup' }, 400],
+    ['配列の型不正', { ...validAnswer, jobRole: 'フロントエンドエンジニア' }, 400],
     ['評価の型不正', { ...validAnswer, eventRating: '5' }, 400],
     ['評価が小数', { ...validAnswer, eventRating: 1.5 }, 400],
     ['必須フィールド欠落', {}, 422],
-    ['コミュニティが null', { ...validAnswer, communityAffiliation: null }, 422],
     ['職種が null', { ...validAnswer, jobRole: null }, 422],
     ['職種が空', { ...validAnswer, jobRole: [] }, 422],
-    ['未知のコミュニティ', { ...validAnswer, communityAffiliation: ['未知'] }, 422],
     ['未知の職種', { ...validAnswer, jobRole: ['未知'] }, 422],
     ['その他の説明なし', { ...validAnswer, jobRole: ['その他'] }, 422],
     ['その他の説明が空白', { ...validAnswer, jobRole: ['その他'], jobRoleOther: '  ' }, 422],
@@ -147,13 +142,12 @@ test('実 HTTP API の登録・検証・集計契約', async (t) => {
     ids.add(response.body.surveyId);
   }
 
-  await t.test('未所属の回答を登録できる', async () => {
+  await t.test('職種・評価と自由記述の回答を登録できる', async () => {
     await submit({ ...validAnswer, feedback: feedbackText });
   });
 
   await t.test('複数選択と文字数の上限ちょうどを登録できる', async () => {
     await submit({
-      communityAffiliation: ['VS Code Meetup', 'GitHub dockyard'],
       jobRole: ['バックエンドエンジニア', 'その他'],
       jobRoleOther: 'あ'.repeat(100),
       eventRating: 3,
@@ -163,7 +157,6 @@ test('実 HTTP API の登録・検証・集計契約', async (t) => {
 
   await t.test('重複選択は二重集計せず空白の自由記述は一覧に出さない', async () => {
     await submit({
-      communityAffiliation: ['VS Code Meetup', 'VS Code Meetup'],
       jobRole: ['バックエンドエンジニア', 'バックエンドエンジニア'],
       eventRating: 1,
       feedback: '   ',
@@ -173,7 +166,7 @@ test('実 HTTP API の登録・検証・集計契約', async (t) => {
   await t.test('同時登録でも回答を欠落させない', async () => {
     await Promise.all(
       [1, 2, 3, 4, 5].map((eventRating) =>
-        submit({ communityAffiliation: [], jobRole: ['DevOpsエンジニア'], eventRating }),
+        submit({ jobRole: ['DevOpsエンジニア'], eventRating }),
       ),
     );
   });
@@ -181,11 +174,6 @@ test('実 HTTP API の登録・検証・集計契約', async (t) => {
   await t.test('登録した 8 件を正確に集計する', async () => {
     const data = await getResults();
     assert.equal(data.totalResponses, 8);
-    assert.deepEqual(data.communityAffiliation, {
-      'VS Code Meetup': 2,
-      'GitHub dockyard': 1,
-      'どちらでもない': 6,
-    });
     assert.deepEqual(data.jobRole, {
       'フロントエンドエンジニア': 1,
       'バックエンドエンジニア': 2,

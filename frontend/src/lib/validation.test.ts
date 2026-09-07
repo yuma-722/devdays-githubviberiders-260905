@@ -3,7 +3,6 @@ import { countChars, emptyDraft, hasErrors, toSurveyRequest, validateDraft, type
 
 const validDraft = (): SurveyDraft => ({
   ...emptyDraft(),
-  communityAffiliation: ['VS Code Meetup'],
   jobRole: ['フロントエンドエンジニア'],
   eventRating: 5,
   feedback: 'とても良かったです',
@@ -12,11 +11,6 @@ const validDraft = (): SurveyDraft => ({
 describe('validateDraft', () => {
   it('正しい入力ではエラーがない', () => {
     expect(hasErrors(validateDraft(validDraft()))).toBe(false);
-  });
-
-  it('コミュニティは空配列でも有効', () => {
-    const errors = validateDraft({ ...validDraft(), communityAffiliation: [] });
-    expect(errors.communityAffiliation).toBeUndefined();
   });
 
   it('職種が未選択ならエラー', () => {
@@ -80,14 +74,12 @@ describe('toSurveyRequest', () => {
   it('README の契約どおりのボディを生成する', () => {
     const request = toSurveyRequest({
       ...validDraft(),
-      communityAffiliation: ['VS Code Meetup', 'GitHub dockyard'],
       jobRole: ['バックエンドエンジニア', 'その他'],
       jobRoleOther: '  テクニカルライター  ',
       eventRating: 4,
       feedback: '  次回も参加したい  ',
     });
     expect(request).toEqual({
-      communityAffiliation: ['VS Code Meetup', 'GitHub dockyard'],
       jobRole: ['バックエンドエンジニア', 'その他'],
       jobRoleOther: 'テクニカルライター',
       eventRating: 4,
@@ -99,12 +91,6 @@ describe('toSurveyRequest', () => {
     const request = toSurveyRequest({ ...validDraft(), jobRoleOther: '不要', feedback: '   ' });
     expect(request).not.toHaveProperty('jobRoleOther');
     expect(request).not.toHaveProperty('feedback');
-    expect(request.communityAffiliation).toEqual(['VS Code Meetup']);
-  });
-
-  it('未所属は空配列として送る', () => {
-    const request = toSurveyRequest({ ...validDraft(), communityAffiliation: [] });
-    expect(request.communityAffiliation).toEqual([]);
   });
 
   it('重複した選択は 1 つにまとめる', () => {

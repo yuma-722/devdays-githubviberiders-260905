@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Survey.Storage;
 
 namespace Survey.Tests;
@@ -25,6 +26,43 @@ public sealed class FileStorageTests : IDisposable
         using JsonDocument json = JsonDocument.Parse(await File.ReadAllTextAsync(FilePath));
         Assert.Equal(survey.Id, json.RootElement[0].GetProperty("id").GetString());
         Assert.Equal("2026-09-05", json.RootElement[0].GetProperty("date").GetString());
+        Assert.Equal(8, json.RootElement[0].EnumerateObject().Count());
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("[\"VS Code Meetup\", \"GitHub dockyard\"]")]
+    [InlineData("[\"旧選択肢\"]")]
+    [InlineData("null")]
+    [InlineData("\"旧形式\"")]
+    public async Task ReadsAndAggregatesLegacyRecordsWithoutRequiringMigration(string legacyValue)
+    {
+        SurveyDocument original = TestData.Document(4, "以前の回答");
+        JsonNode document = JsonSerializer.SerializeToNode(original, SurveyJson.Options)!;
+        document["communityAffiliation"] = JsonNode.Parse(legacyValue);
+        string contents = new JsonArray(document).ToJsonString();
+        using FileSurveyRepository repository = new(FilePath);
+        await File.WriteAllTextAsync(FilePath, contents);
+
+        IReadOnlyList<SurveyDocument> documents = await repository.GetAllAsync();
+        SurveyDocument saved = Assert.Single(documents);
+        Assert.Equal(original.Id, saved.Id);
+        Assert.Equal(original.Date, saved.Date);
+        Assert.Equal(original.CreatedAt, saved.CreatedAt);
+        Assert.Equal(original.UpdatedAt, saved.UpdatedAt);
+        SurveyResults results = SurveyAggregator.Aggregate(documents);
+        Assert.Equal(1, results.TotalResponses);
+        Assert.Equal(1, results.JobRole[SurveyOptions.JobRoles[0]]);
+        Assert.Equal(4, results.EventRating.Average);
+        Assert.Equal(original.Feedback, Assert.Single(results.Feedback).Feedback);
+        Assert.Equal(contents, await File.ReadAllTextAsync(FilePath));
+
+        await repository.AddAsync(TestData.Document());
+        using JsonDocument json = JsonDocument.Parse(await File.ReadAllTextAsync(FilePath));
+        Assert.Equal(2, json.RootElement.GetArrayLength());
+        Assert.All(json.RootElement.EnumerateArray(),
+            item => Assert.False(item.TryGetProperty("communityAffiliation", out _)));
+        Assert.Equal(original.Id, json.RootElement[0].GetProperty("id").GetString());
     }
 
     [Fact]

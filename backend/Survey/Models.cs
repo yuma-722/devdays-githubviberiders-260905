@@ -6,9 +6,6 @@ namespace Survey;
 public static class SurveyOptions
 {
     public const string OtherJobRole = "その他";
-    public const string Unaffiliated = "どちらでもない";
-    public static IReadOnlyList<string> Communities { get; } =
-        Array.AsReadOnly(["VS Code Meetup", "GitHub dockyard"]);
     public static IReadOnlyList<string> JobRoles { get; } = Array.AsReadOnly([
         "フロントエンドエンジニア", "バックエンドエンジニア", "フルスタックエンジニア",
         "DevOpsエンジニア", "データエンジニア", "モバイルエンジニア", OtherJobRole
@@ -25,7 +22,6 @@ public static class SurveyJson
 }
 
 public sealed record SurveyInput(
-    string[] CommunityAffiliation,
     string[] JobRole,
     string? JobRoleOther,
     int EventRating,
@@ -35,7 +31,6 @@ public sealed record SurveyDocument
 {
     public required string Id { get; init; }
     public required string Date { get; init; }
-    public required string[] CommunityAffiliation { get; init; }
     public required string[] JobRole { get; init; }
     public string? JobRoleOther { get; init; }
     public required int EventRating { get; init; }
@@ -50,7 +45,6 @@ public sealed record SurveyDocument
         {
             Id = Guid.NewGuid().ToString(),
             Date = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            CommunityAffiliation = input.CommunityAffiliation.Distinct(StringComparer.Ordinal).ToArray(),
             JobRole = input.JobRole.Distinct(StringComparer.Ordinal).ToArray(),
             JobRoleOther = input.JobRoleOther,
             EventRating = input.EventRating,
@@ -63,7 +57,6 @@ public sealed record SurveyDocument
 
 public sealed record SurveyResults(
     int TotalResponses,
-    Dictionary<string, int> CommunityAffiliation,
     Dictionary<string, int> JobRole,
     RatingResults EventRating,
     IReadOnlyList<FeedbackResult> Feedback);

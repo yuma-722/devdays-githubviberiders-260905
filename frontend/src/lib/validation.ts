@@ -1,11 +1,9 @@
 import {
-  COMMUNITIES,
   FEEDBACK_MAX,
   JOB_ROLES,
   JOB_ROLE_OTHER_MAX,
   OTHER_JOB_ROLE,
   RATINGS,
-  type Community,
   type EventRating,
   type JobRole,
   type SurveyRequest,
@@ -13,19 +11,17 @@ import {
 
 /** フォームの入力状態（送信前のドラフト） */
 export interface SurveyDraft {
-  communityAffiliation: Community[];
   jobRole: JobRole[];
   jobRoleOther: string;
   eventRating: EventRating | null;
   feedback: string;
 }
 
-export type SurveyField = 'communityAffiliation' | 'jobRole' | 'jobRoleOther' | 'eventRating' | 'feedback';
+export type SurveyField = 'jobRole' | 'jobRoleOther' | 'eventRating' | 'feedback';
 
 export type SurveyErrors = Partial<Record<SurveyField, string>>;
 
 export const emptyDraft = (): SurveyDraft => ({
-  communityAffiliation: [],
   jobRole: [],
   jobRoleOther: '',
   eventRating: null,
@@ -47,12 +43,6 @@ export const countChars = (text: string): number => text.length;
 
 export function validateDraft(draft: SurveyDraft): SurveyErrors {
   const errors: SurveyErrors = {};
-
-  if (!Array.isArray(draft.communityAffiliation)) {
-    errors.communityAffiliation = '所属コミュニティの形式が不正です';
-  } else if (draft.communityAffiliation.some((c) => !(COMMUNITIES as readonly string[]).includes(c))) {
-    errors.communityAffiliation = '所属コミュニティに不正な値が含まれています';
-  }
 
   const roles = unique(draft.jobRole);
   if (roles.length === 0) {
@@ -94,7 +84,6 @@ export function toSurveyRequest(draft: SurveyDraft): SurveyRequest {
   }
   const jobRole = unique(draft.jobRole);
   const request: SurveyRequest = {
-    communityAffiliation: unique(draft.communityAffiliation),
     jobRole,
     eventRating: draft.eventRating,
   };

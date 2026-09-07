@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -55,26 +56,39 @@ public sealed class HttpResponseTests
         using JsonDocument json = await ReadResponseAsync(response);
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
         JsonElement data = json.RootElement.GetProperty("data");
-        Assert.Equal(5, data.EnumerateObject().Count());
+        Assert.Equal(4, data.EnumerateObject().Count());
         Assert.Equal(0, data.GetProperty("totalResponses").GetInt32());
-        Assert.Equal(3, data.GetProperty("communityAffiliation").EnumerateObject().Count());
         Assert.Equal(7, data.GetProperty("jobRole").EnumerateObject().Count());
         Assert.Equal(5, data.GetProperty("eventRating").GetProperty("distribution").EnumerateObject().Count());
         Assert.Equal(0, data.GetProperty("eventRating").GetProperty("average").GetDouble());
         Assert.Equal(0, data.GetProperty("feedback").GetArrayLength());
     }
 
-    [Fact]
-    public async Task FeedbackTimestampIsUtcIso8601()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PopulatedGetExcludesLegacyFieldsAndKeepsUtcFeedbackTimestamp(bool includeLegacyField)
     {
+        JsonNode document = JsonSerializer.SerializeToNode(TestData.Document(feedback: "楽しかった"), SurveyJson.Options)!;
+        if (includeLegacyField)
+        {
+            document["communityAffiliation"] = new JsonArray("VS Code Meetup");
+        }
+        SurveyDocument survey = document.Deserialize<SurveyDocument>(SurveyJson.Options)!;
         Mock<ISurveyRepository> repository = new();
         repository.Setup(value => value.GetAllAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { TestData.Document(feedback: "楽しかった") });
+            .ReturnsAsync(new[] { survey });
         HttpResponseData response = await Functions(repository.Object).GetResultsAsync(
             new TestHttpRequest(), CancellationToken.None);
         using JsonDocument json = await ReadResponseAsync(response);
+        JsonElement data = json.RootElement.GetProperty("data");
+        Assert.Equal(4, data.EnumerateObject().Count());
+        Assert.False(data.TryGetProperty("communityAffiliation", out _));
+        Assert.Equal(1, data.GetProperty("totalResponses").GetInt32());
+        Assert.Equal(1, data.GetProperty("jobRole").GetProperty(SurveyOptions.JobRoles[0]).GetInt32());
+        Assert.Equal(5, data.GetProperty("eventRating").GetProperty("average").GetDouble());
         Assert.Equal("2026-09-05T23:59:59Z",
-            json.RootElement.GetProperty("data").GetProperty("feedback")[0].GetProperty("timestamp").GetString());
+            data.GetProperty("feedback")[0].GetProperty("timestamp").GetString());
     }
 
     [Fact]

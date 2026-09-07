@@ -1,7 +1,5 @@
 import {
-  COMMUNITIES,
   JOB_ROLES,
-  NO_COMMUNITY_KEY,
   RATINGS,
   type SurveyRequest,
   type SurveyResults,
@@ -147,11 +145,6 @@ export function normalizeResults(raw: unknown): SurveyResults {
 
   if (!isCount(raw.totalResponses)) throw invalidResults('totalResponses が非負整数ではありません');
 
-  const communityAffiliation = requireCounts(
-    raw.communityAffiliation,
-    [...COMMUNITIES, NO_COMMUNITY_KEY],
-    'communityAffiliation',
-  );
   const jobRole = requireCounts(raw.jobRole, JOB_ROLES, 'jobRole');
 
   if (!isRecord(raw.eventRating)) throw invalidResults('eventRating がオブジェクトではありません');
@@ -180,7 +173,6 @@ export function normalizeResults(raw: unknown): SurveyResults {
 
   return {
     totalResponses: raw.totalResponses,
-    communityAffiliation,
     jobRole,
     eventRating: { average: averageRaw, distribution },
     feedback,

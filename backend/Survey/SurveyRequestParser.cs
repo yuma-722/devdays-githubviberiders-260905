@@ -21,7 +21,6 @@ public static class SurveyRequestParser
             throw InvalidType("リクエストはJSONオブジェクトで指定してください。");
         }
 
-        string[] communities = ReadArray(root, "communityAffiliation");
         string[] roles = ReadArray(root, "jobRole");
         string? otherRole = ReadOptionalString(root, "jobRoleOther");
         string? feedback = ReadOptionalString(root, "feedback");
@@ -34,20 +33,15 @@ public static class SurveyRequestParser
             throw InvalidType("eventRatingは整数で指定してください。");
         }
 
-        ValidateRules(communities, roles, otherRole, eventRating, feedback);
+        ValidateRules(roles, otherRole, eventRating, feedback);
         return new SurveyInput(
-            communities.Distinct(StringComparer.Ordinal).ToArray(),
             roles.Distinct(StringComparer.Ordinal).ToArray(),
             otherRole, eventRating, feedback);
     }
 
     public static void ValidateRules(
-        string[] communities, string[] roles, string? otherRole, int rating, string? feedback)
+        string[] roles, string? otherRole, int rating, string? feedback)
     {
-        if (communities.Any(value => !SurveyOptions.Communities.Contains(value, StringComparer.Ordinal)))
-        {
-            throw InvalidRule("communityAffiliationに無効な選択肢が含まれています。");
-        }
         if (roles.Length == 0 || roles.Any(value => !SurveyOptions.JobRoles.Contains(value, StringComparer.Ordinal)))
         {
             throw InvalidRule("jobRoleは有効な選択肢を1つ以上指定してください。");

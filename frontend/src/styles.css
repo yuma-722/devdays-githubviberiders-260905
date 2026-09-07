@@ -521,9 +521,6 @@ code {
 .choice:has(input:disabled) {
   cursor: not-allowed;
 }
-.choice--quiet {
-  border-style: dashed;
-}
 
 .choice input {
   appearance: none;
@@ -995,16 +992,6 @@ code {
   padding: 12px 0 4px;
 }
 
-.block-grid {
-  display: grid;
-  gap: 20px;
-}
-@media (min-width: 720px) {
-  .block-grid {
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-  }
-}
 
 /* 路線バー */
 .bars {
