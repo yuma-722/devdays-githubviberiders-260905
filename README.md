@@ -169,12 +169,14 @@ Functions の CI 認証には、ユーザー割り当てマネージド ID **id-
 | 設定 | 値 |
 | --- | --- |
 | Issuer | `https://token.actions.githubusercontent.com` |
-| Subject | `repo:yuma-722/devdays-githubviberiders-260905:ref:refs/heads/main` |
+| Subject | `repo:yuma-722@133518039/devdays-githubviberiders-260905@1357775362:ref:refs/heads/main` |
 | Audience | `api://AzureADTokenExchange` |
 | Azure IAM ロール | `Website Contributor`、対象 `func-devdays-survey` リソースだけのスコープ |
 
 このデプロイ ID に Cosmos のデータアクセス権限は付与しません。Functions の実行 ID と CI のデプロイ ID を分離しています。
 GitHub Actions は `id-token: write` で短時間のトークンを取得するため、Azure の長期クライアントシークレットは不要です。
+このリポジトリでは、所有者・リポジトリ ID を含む Subject が発行されます。
+上記の完全一致が必要で、ID なしの `repo:owner/repository:ref:refs/heads/main` では認証に失敗します。
 
 ### 本番への反映
 
